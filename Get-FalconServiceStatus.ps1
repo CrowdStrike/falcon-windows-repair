@@ -67,7 +67,7 @@ if($csfStatus -and $csaStatus) {
     if (-Not($csFolderExists) -and -Not($csDriverFolderExists)) {
         Write-Output "[!] The CrowdStrike Falcon 'C:\Program Files\CrowdStrike' and 'C:\Windows\System32\drivers\CrowdStrike' folders were likely renamed or deleted. Repair the sensor by placing the respective sensor version installer binary in 'C:\Temp\' and running the following command: 'C:\Temp\<installation_file.exe> MAINTENANCE_TOKEN=<maintenance token> /repair /silent /forcedowngrade /norestart'"
     } elseif (($csFolderExists) -and -Not($csDriverFolderExists)) {
-        if($csFolderTimeEpoch -lt $comparisonEpoch) {
+        if($csFolderTimeEpoch -gt $comparisonEpoch) {
             Write-Output "[!] The CrowdStrike Falcon 'C:\Windows\System32\drivers\CrowdStrike' folder was likely renamed or deleted. Repair the sensor by placing the respective sensor version installer binary in 'C:\Temp\' and running the following command: 'C:\Temp\<installation_file.exe> /repair /silent /forcedowngrade /norestart'"
         } else {
             Write-Output "[!] The CrowdStrike Falcon 'Program Files' folder was likely renamed or modified. Repair the sensor by placing the respective sensor version installer binary in 'C:\Temp\' and running the following command: 'C:\Temp\<installation_file.exe> MAINTENANCE_TOKEN=<maintenance token> /repair /silent /forcedowngrade /norestart'"
@@ -77,7 +77,7 @@ if($csfStatus -and $csaStatus) {
             Write-Output "[!] The CrowdStrike Falcon 'C:\Windows\System32\drivers\CrowdStrike\csagent.sys' and 'C:\Program Files\CrowdStrike\CsFalconService.exe' files were likely renamed or deleted. Repair the sensor by placing the respective sensor version installer binary in 'C:\Temp\' and running the following command: 'C:\Temp\<installation_file.exe> MAINTENANCE_TOKEN=<maintenance token> /repair /silent /forcedowngrade /norestart'"
         } elseif (-Not(Test-Path $csAgentFile) -and (Test-Path $csServiceFile)) {
             Write-Output "[!] The CrowdStrike Falcon 'C:\Windows\System32\drivers\CrowdStrike\csagent.sys' file was likely renamed or deleted. Repair the sensor by placing the respective sensor version installer binary in 'C:\Temp\' and running the following command: 'C:\Temp\<installation_file.exe> /repair /silent /forcedowngrade /norestart'"
-        } elseif ($csFolderTimeEpoch -lt $comparisonEpoch) {
+        } elseif ($csFolderTimeEpoch -gt $comparisonEpoch) {
             Write-Output "[!] The CrowdStrike Falcon 'Program Files' folder was likely renamed or modified. Repair the sensor by placing the respective sensor version installer binary in 'C:\Temp\' and running the following command: 'C:\Temp\<installation_file.exe> MAINTENANCE_TOKEN=<maintenance token> /repair /silent /forcedowngrade /norestart'"
         }
     }

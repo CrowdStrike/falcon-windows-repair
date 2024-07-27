@@ -30,7 +30,7 @@ The script must be run as an administrator on the target machine.
 
 Run with:
 
-`.\Get-FalconServiceStatus.ps11`
+`.\Get-FalconServiceStatus.ps1`
 
 ## Repair-FalconSensor.ps1
 
@@ -61,7 +61,7 @@ For machines still stuck within unusable states, please continue to follow instr
 
 * Check host for the above issues
 * Remove bad ChannelFile if exists  
-* Via API, download WindowsSensor to `C:\\Temp`  
+* Via API, download WindowsSensor to `C:\Temp`  
 * Via API, retrieve the maintenance token and host details for the current host
 * Repair the Agent install
 

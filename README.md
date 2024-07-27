@@ -18,7 +18,7 @@ Scripts to help with the diagnosis and repair of unhealthy Windows Falcon sensor
 ## Get-FalconServiceStatus.ps1
 
 Query the current status of the Falcon sensor as installed on the endpoint, and recommend the best repair option given the sensor state.
-Additionally, identify whether the affected 291 Channel File(s) remains on disk and prompt for removal.
+Additionally, identify whether the defective 291 Channel File(s) remains on disk and requires removal.
 
 ### Requirements
 

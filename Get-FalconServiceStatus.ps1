@@ -1,6 +1,6 @@
 <# CrowdStrike Falcon Sensor Status Check
 .SYNOPSIS
-    Query the current status of the Falcon sensor as installed on the endpoint, and recommend the best repair option given the sensor state. Additionally, identify whether the affected 291 Channel File(s) remains on disk and prompt for removal
+    Query the current status of the Falcon sensor as installed on the endpoint, and recommend the best repair option given the sensor state. Additionally, identify whether the defective 291 Channel File(s) remains on disk and requires removal.
 .EXAMPLE
     .\Get-FalconServiceStatus.ps1
 .NOTES

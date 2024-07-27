@@ -3,13 +3,10 @@
         PS v3 or higher required
         TLS 1.2 required
     .NOTES
-    Version:	v1.0.0
+    Version:	v1.1.0
     Author:	CrowdStrike, Inc.
     Usage:      Use at your own risk. While all efforts have been made to ensure this script works as expected, you should test
-                in your own environment. This script uses security details that could allow bypass of sensor security controls, and
-                availability should be controlled.
-    Reference: To create the API client and secrets required please follow the below support article.
-               https://supportportal.crowdstrike.com/s/article/ka16T000000wt8AQAQ
+                in your own environment. 
     Requirements:    
     Falcon Administrator role required for Created API access
     API Key with following permissions: 'Hosts: Read', 'Sensor Download: Read', 'Sensor Update Policies: Read/Write'
@@ -39,11 +36,21 @@ param(
     [string]$SourceSecret = '',
 
     [ValidateSet('eu-1', 'us-1', 'us-2', 'us-gov-1')]
-    [string]
-    $Cloud = ''
+    [string]$Cloud = ''
+
+
 
 )
 <# ----------------      END Editable Region. ----------------- #>
+
+
+
+
+
+
+
+
+
 
 begin {
     if ($PSVersionTable.PSVersion -lt '3.0')
@@ -86,7 +93,7 @@ process {
     $InstallArgs = '/repair /quiet /norestart /forcedowngrade ProvNoWait=1'
     $tempFolderCreated = $false
     try {
-        if (-not ((Test-Path $csFolderPath) -or (Test-Path $csDriverFolderPath))) {
+        if (-not ((Test-Path $csFolderPath) -or -not (Test-Path $csDriverFolderPath))) {
             $repairHost = $true
         } else {
             $csFolderTime = Get-Item -Path $csFolderPath | Select-Object -ExpandProperty LastWriteTimeUtc;
@@ -100,7 +107,7 @@ process {
         if (((Get-Service -Name "CsFalconService").Status -ne "Running") -or ((Get-Service -Name "CsFalconService").Status -ne "Running")) {
             $repairHost = $true
         }
-        if (-not (Test-Path "C:\Windows\System32\drivers\CrowdStrike\csagent.sys")) {
+        if (-not ((Test-Path "C:\Windows\System32\drivers\CrowdStrike\csagent.sys") -or -not (Test-Path "C:\Program Files\CrowdStrike\CsFalconService.exe"))) {
             $repairHost = $true
         }   
     } catch {
@@ -340,7 +347,7 @@ process {
             Write-Output "[$($_.Id)] Beginning recover using the following arguments: '$($InstallArgs)' ..."
         }
         try {
-            if (-not ((Test-Path $csFolderPath) -or (Test-Path $csDriverFolderPath))) {
+            if (-not ((Test-Path $csFolderPath) -or -not (Test-Path $csDriverFolderPath))) {
                 throw "Error occured while repairing CrowdStrike Falcon"
             } 
             if (((Get-Service -Name "CsFalconService").Status -ne "Running") -or ((Get-Service -Name "CsFalconService").Status -ne "Running")) {

@@ -3,7 +3,7 @@
         PS v3 or higher required
         TLS 1.2 required
     .NOTES
-    Version:   v1.1.0
+    Version:   v1.0
     Author:    CrowdStrike, Inc.
     Usage:      Use at your own risk. While all efforts have been made to ensure this script works as expected, you should test
                 in your own environment. 
@@ -38,19 +38,8 @@ param(
     [ValidateSet('eu-1', 'us-1', 'us-2', 'us-gov-1')]
     [string]$Cloud = ''
 
-
-
 )
 <# ----------------      END Editable Region. ----------------- #>
-
-
-
-
-
-
-
-
-
 
 begin {
     if ($PSVersionTable.PSVersion -lt '3.0')
@@ -345,25 +334,6 @@ process {
         Start-Process -FilePath $InstallerPath -ArgumentList $InstallArgs -PassThru | ForEach-Object {
             Write-Output "[$($_.Id)] '$($_.ProcessName)' beginning recover; sensor will become unresponsive..."
             Write-Output "[$($_.Id)] Beginning recover using the following arguments: '$($InstallArgs)' ..."
-        }
-        try {
-            if (-not (Test-Path $csFolderPath) -or -not (Test-Path $csDriverFolderPath)) {
-                throw "Error occured while repairing CrowdStrike Falcon"
-            } 
-            if (((Get-Service -Name "CsFalconService").Status -ne "Running") -or ((Get-Service -Name "CsFalconService").Status -ne "Running")) {
-                throw "Error occured while repairing CrowdStrike Falcon"
-            }        
-        } catch {
-            throw "Error occured while repairing CrowdStrike Falcon"
-        } 
-        try {
-            if ($tempFolderCreated) {
-                Remove-Item -Path "C:\Temp\" -Force -Recurse
-            } else {
-                Remove-Item -Path "C:\Temp\WindowsSensor.exe"
-            }
-        } catch {
-            throw "Not able to clean up installer."
         }
     }
 }

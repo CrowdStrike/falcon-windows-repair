@@ -3,14 +3,16 @@
         PS v3 or higher required
         TLS 1.2 required
     .NOTES
-    Usage:      Use at your own risk. While all efforts have been made to ensure this script works as expected, you should test
-                in your own environment. 
-    Requirements:    
-    Falcon Administrator role required for Created API access
-    API Key with following permissions: 'Hosts: Read', 'Sensor Download: Read', 'Sensor Update Policies: Read/Write'
-    PowerShell v3 or higher
-    TLS 1.2 minimum
-    Sign the script, or execute with bypass        
+        Version:   v1.1
+        Author:    CrowdStrike, Inc.
+        Usage:     Use at your own risk. While all efforts have been made to ensure this script works as expected, you should test
+                   in your own environment. 
+        Requirements:    
+            Falcon Administrator role required for Created API access
+            API Key with following permissions: 'Hosts: Read', 'Sensor Download: Read', 'Sensor Update Policies: Read/Write'
+            PowerShell v3 or higher
+            TLS 1.2 minimum
+            Sign the script, or execute with bypass        
     .DESCRIPTION
         Determines state of Falcon Sensor and repairs as necessary. Additional checks for bad channel file are performed, and file 
         is removed if deemed bad.
@@ -70,7 +72,6 @@ begin {
 } 
 process {
     $repairHost = $false
-    $upgradeSensor =  $false
     $remediationEpoch = 1721370420
     $csFolderPath = "C:\Program Files\CrowdStrike"
     $csDriverFolderPath = "C:\Windows\System32\drivers\CrowdStrike"
@@ -342,8 +343,5 @@ process {
             Write-Output "[$($_.Id)] '$($_.ProcessName)' beginning recover; sensor will become unresponsive..."
             Write-Output "[$($_.Id)] Beginning recover using the following arguments: '$($InstallArgs)' ..."
         }
-    }
-    if ($upgradeSensor) {
-
     }
 }

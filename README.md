@@ -4,6 +4,10 @@ Scripts to help with the diagnosis and repair of unhealthy Windows Falcon sensor
 
 ### What's New
 
+#### Release 1.1.0
+
+- New functionality added to enable the repair script to work with Falcon environments where parent-child relationships are used (Flight Control).
+
 #### Initial Release 1.0.0
 
 - Initial release
@@ -54,7 +58,9 @@ For machines still stuck within unusable states, please continue to follow instr
 * Was `Program Files\CrowdStrike` renamed or deleted?  
 * Was `Windows\System32\drivers\CrowdStrike` renamed or deleted?  
 * Was `csagent.sys` renamed or deleted?  
-* Was `CsFalconService.exe` renamed or deleted?  
+* Was `CsFalconService.exe` renamed or deleted?
+* Is the `csagent` service running?
+* Is the `CsFalconService` service running?  
 * Does the bad ChannelFile exist on disk?
 
 ### Script Actions

@@ -3,8 +3,6 @@
         PS v3 or higher required
         TLS 1.2 required
     .NOTES
-    Version:   v1.0
-    Author:    CrowdStrike, Inc.
     Usage:      Use at your own risk. While all efforts have been made to ensure this script works as expected, you should test
                 in your own environment. 
     Requirements:    
@@ -29,10 +27,8 @@
 [CmdletBinding()]
 param( 
 
-    [Parameter(Mandatory = $false)]
     [string]$SourceId = '',
- 
-    [Parameter(Mandatory = $false)]
+     
     [string]$SourceSecret = '',
 
     [ValidateSet('eu-1', 'us-1', 'us-2', 'us-gov-1')]
@@ -74,13 +70,13 @@ begin {
 } 
 process {
     $repairHost = $false
+    $upgradeSensor =  $false
     $remediationEpoch = 1721370420
     $csFolderPath = "C:\Program Files\CrowdStrike"
     $csDriverFolderPath = "C:\Windows\System32\drivers\CrowdStrike"
     $InstallerPath = 'C:\temp\WindowsSensor.exe'
     $Hash = ''
     $InstallArgs = '/repair /quiet /norestart /forcedowngrade ProvNoWait=1'
-    $tempFolderCreated = $false
     try {
         if (-not (Test-Path $csFolderPath) -or -not (Test-Path $csDriverFolderPath)) {
             $repairHost = $true
@@ -136,6 +132,16 @@ process {
                 'us-2' { $SrcHostname = 'https://api.us-2.crowdstrike.com' }
                 'us-gov-1' { $SrcHostname = 'https://api.laggar.gcw.crowdstrike.com' }
             }
+            # Get CID value from registry
+            $CurrentCID = ''
+            if (Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}\Default") -Name CU -ErrorAction SilentlyContinue) {
+                $CurrentCID = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\" +
+                            "{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}" +
+                            "\Default") -Name CU -ErrorAction SilentlyContinue).CU)).ToLower() -replace '-','')
+            } elseif (Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services\CSAgent\Sim") -Name AG -ErrorAction SilentlyContinue) {
+                $CurrentCID = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services" +
+                            "\CSAgent\Sim") -Name CU -ErrorAction SilentlyContinue).CU)).ToLower() -replace '-','')
+            }
             $Param = @{
                 Uri = "$($SrcHostname)/oauth2/token"
                 Method = 'post'
@@ -146,6 +152,7 @@ process {
                 Body = @{
                     'client_id' = $SourceId
                     'client_secret' = $SourceSecret
+                    'member_cid' = $CurrentCID
                 }
             }    
             # Get API Token
@@ -335,5 +342,8 @@ process {
             Write-Output "[$($_.Id)] '$($_.ProcessName)' beginning recover; sensor will become unresponsive..."
             Write-Output "[$($_.Id)] Beginning recover using the following arguments: '$($InstallArgs)' ..."
         }
+    }
+    if ($upgradeSensor) {
+
     }
 }

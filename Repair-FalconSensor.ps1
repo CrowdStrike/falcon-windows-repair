@@ -90,7 +90,7 @@ process {
                 $repairHost = $true
             }
         }
-        if (((Get-Service -Name "CsFalconService").Status -ne "Running") -or ((Get-Service -Name "CsFalconService").Status -ne "Running")) {
+        if (((Get-Service -Name "CsFalconService").Status -ne "Running") -or ((Get-Service -Name "csagent").Status -ne "Running")) {
             $repairHost = $true
         }
         if (-not (Test-Path "C:\Windows\System32\drivers\CrowdStrike\csagent.sys") -or -not (Test-Path "C:\Program Files\CrowdStrike\CsFalconService.exe")) {

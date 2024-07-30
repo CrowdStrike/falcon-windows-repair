@@ -72,6 +72,7 @@ begin {
 } 
 process {
     $repairHost = $false
+    $tempFolderCreated = $false
     $remediationEpoch = 1721370420
     $csFolderPath = "C:\Program Files\CrowdStrike"
     $csDriverFolderPath = "C:\Windows\System32\drivers\CrowdStrike"
@@ -339,9 +340,23 @@ process {
             throw "Unable to retrieve uninstall token from source cloud $($Cloud) using client id $($SourceId). Return was: $($Request)"
         }
         $InstallArgs += " MAINTENANCE_TOKEN=$($Request.resources.uninstall_token)"
-        Start-Process -FilePath $InstallerPath -ArgumentList $InstallArgs -PassThru | ForEach-Object {
+        Start-Process -FilePath $InstallerPath -ArgumentList $InstallArgs -PassThru -Wait | ForEach-Object {
             Write-Output "[$($_.Id)] '$($_.ProcessName)' beginning recover; sensor will become unresponsive..."
             Write-Output "[$($_.Id)] Beginning recover using the following arguments: '$($InstallArgs)' ..."
+        }
+        try {
+            if ($tempFolderCreated) {
+                Remove-Item ($InstallerPath | Split-Path -Parent) -Force -Recurse -ErrorAction SilentlyContinue
+            } else {
+                Remove-Item $InstallerPath -Force -Recurse -ErrorAction SilentlyContinue
+            }
+        }
+        catch {
+            if ($tempFolderCreated) {
+                Write-Output "Error deleting '$($InstallerPath | Split-Path -Parent)' and '$InstallerPath'. Manual removal is required."
+            } else {
+                Write-Output "Error deleting $InstallerPath. Manual removal is required."
+            }
         }
     }
 }

@@ -138,7 +138,7 @@ process {
         } elseif ($SourceId -notmatch "^[a-zA-Z0-9]{32}$") {
             throw "SourceID '$SourceID' does not match proper formatting, please ensure SourceID is correct."
         } elseif ($SourceSecret -notmatch "^[a-zA-Z0-9]{40}$") {
-            throw "SourceSecret '$SourceSecret' does not match proper formatting, please ensure SourceID is correct."
+            throw "SourceSecret '$SourceSecret' does not match proper formatting, please ensure SourceSecret is correct."
         }
         if (-not (Test-Path -Path "C:\temp\")) {
             New-Item -Path "C:\" -Name "temp" -ItemType "directory"

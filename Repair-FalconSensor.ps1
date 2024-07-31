@@ -37,7 +37,10 @@ param(
 
     # Put which cloud your environment is hosted on
     [ValidateSet('eu-1', 'us-1', 'us-2', 'us-gov-1')]
-    [string]$Cloud = ''
+    [string]$Cloud = '',
+
+    # Set value to $true if using a Flight Control enabled CID
+    [bool]$FlightControl = $false
 
 )
 <# ----------------      END Editable Region. ----------------- #>
@@ -137,7 +140,7 @@ process {
             throw "API credentials missing."
         } elseif ($SourceId -notmatch "^[a-fA-F0-9]{32}$") {
             throw "SourceID '$SourceID' does not match proper formatting, please ensure SourceID is correct."
-        } elseif ($SourceSecret -notmatch "^[a-fA-F0-9]{40}$") {
+        } elseif ($SourceSecret -notmatch "^[a-zA-Z0-9]{40}$") {
             throw "SourceSecret '$SourceSecret' does not match proper formatting, please ensure SourceSecret is correct."
         }
         if (-not (Test-Path -Path "C:\temp\")) {
@@ -154,35 +157,52 @@ process {
                 'us-1' { $SrcHostname = 'https://api.crowdstrike.com' }
                 'us-2' { $SrcHostname = 'https://api.us-2.crowdstrike.com' }
                 'us-gov-1' { $SrcHostname = 'https://api.laggar.gcw.crowdstrike.com' }
-            }
-            # Get CID value from registry
-            try {
-                $CurrentCID = ''
-                if (Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}\Default") -Name CU -ErrorAction SilentlyContinue) {
-                    $CurrentCID = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\" +
-                                "{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}" +
-                                "\Default") -Name CU -ErrorAction SilentlyContinue).CU)).ToLower() -replace '-','')
-                } elseif (Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services\CSAgent\Sim") -Name AG -ErrorAction SilentlyContinue) {
-                    $CurrentCID = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services" +
-                                "\CSAgent\Sim") -Name CU -ErrorAction SilentlyContinue).CU)).ToLower() -replace '-','')
-                }
-            } catch {
-                Write-Output "Unable to obtain CID from registry. If Flight Control is enabled for your environment, please re-run script with an API key scoped from child CID. If not, please disregard this message."
-            }
-            if (($CurrentCID) -and ($CurrentCID -match "^[a-fA-F0-9]{32}$")) {
-                $Param = @{
-                    Uri = "$($SrcHostname)/oauth2/token"
-                    Method = 'post'
-                    Headers = @{
-                        accept = 'application/json'
-                        'content-type' = 'application/x-www-form-urlencoded'
+            }            
+            if ($FlightControl) {
+                try {
+                    # Get CID value from registry
+                    $CurrentCID = ''
+                    if (Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}\Default") -Name CU -ErrorAction SilentlyContinue) {
+                        $CurrentCID = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\" +
+                                    "{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}" +
+                                    "\Default") -Name CU -ErrorAction SilentlyContinue).CU)).ToLower() -replace '-','')
+                    } elseif (Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services\CSAgent\Sim") -Name AG -ErrorAction SilentlyContinue) {
+                        $CurrentCID = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services" +
+                                    "\CSAgent\Sim") -Name CU -ErrorAction SilentlyContinue).CU)).ToLower() -replace '-','')
                     }
-                    Body = @{
-                        'client_id' = $SourceId
-                        'client_secret' = $SourceSecret
-                        'member_cid' = $CurrentCID
+                    # Ensure CID matches regex criteria
+                    if (($CurrentCID) -and ($CurrentCID -match "^[a-fA-F0-9]{32}$")) {
+                        $Param = @{
+                            Uri = "$($SrcHostname)/oauth2/token"
+                            Method = 'post'
+                            Headers = @{
+                                accept = 'application/json'
+                                'content-type' = 'application/x-www-form-urlencoded'
+                            }
+                            Body = @{
+                                'client_id' = $SourceId
+                                'client_secret' = $SourceSecret
+                                'member_cid' = $CurrentCID
+                            }
+                        } 
+                    } else {
+                        Write-Output "CID '$CurrentCID' does not match formatting criteria for CID. Continuing with script.."
+                        $Param = @{
+                            Uri = "$($SrcHostname)/oauth2/token"
+                            Method = 'post'
+                            Headers = @{
+                                accept = 'application/json'
+                                'content-type' = 'application/x-www-form-urlencoded'
+                            }
+                            Body = @{
+                                'client_id' = $SourceId
+                                'client_secret' = $SourceSecret
+                            }
+                        } 
                     }
-                } 
+                } catch {
+                    Write-Output "Unable to obtain CID from registry. Please re-run script with an API key scoped from child CID if error occurs."
+                }                
             } else {
                 $Param = @{
                     Uri = "$($SrcHostname)/oauth2/token"

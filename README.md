@@ -80,7 +80,7 @@ For machines still stuck within unusable states, please continue to follow instr
    3. Sensor update policies: Read & Write
 3. Copy down the `Client ID` and `Client Secret` from the pop-up.
 4. Open `Repair-FalconSensor.ps1` in a text editor
-5. Scroll to the “Editable Region” of the script and enter the API `Client ID`, `Client Secret`, and your Falcon Cloud.
+5. Scroll to the “Editable Region” of the script and enter the API `Client ID`, `Client Secret`, your Falcon Cloud, and set Flight Control to `$true` if using this in a Flight Controlled CID.
    1. **NOTE:** These are the ONLY FIELDS THAT SHOULD BE CHANGED IN THE SCRIPT. Nothing else should be altered. 
 
 ### Usage
@@ -88,6 +88,10 @@ For machines still stuck within unusable states, please continue to follow instr
 Once Set-up steps are complete, run the script with 
 
 `.\Repair-FalconSensor.ps1`
+
+This script can also be ran by specifying the arguments and values when running
+
+`.\Repair-FalconSensor.ps1 -SourceID {your_ID} -SourceSecret {your_secret} -Cloud {cloud} -FlightControl {$true or $false}`
 
 ### Verify Sensor Repair
 

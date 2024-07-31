@@ -135,9 +135,9 @@ process {
         # Validate if API credentials have been set.
         if ((-not $SourceId) -or (-not $SourceSecret)) {
             throw "API credentials missing."
-        } elseif ($SourceId -notmatch "^[a-zA-Z0-9]{32}$") {
+        } elseif ($SourceId -notmatch "^[a-fA-F0-9]{32}$") {
             throw "SourceID '$SourceID' does not match proper formatting, please ensure SourceID is correct."
-        } elseif ($SourceSecret -notmatch "^[a-zA-Z0-9]{40}$") {
+        } elseif ($SourceSecret -notmatch "^[a-fA-F0-9]{40}$") {
             throw "SourceSecret '$SourceSecret' does not match proper formatting, please ensure SourceSecret is correct."
         }
         if (-not (Test-Path -Path "C:\temp\")) {
@@ -169,7 +169,7 @@ process {
             } catch {
                 Write-Output "Unable to obtain CID from registry. If Flight Control is enabled for your environment, please re-run script with an API key scoped from child CID. If not, please disregard this message."
             }
-            if (($CurrentCID) -and ($CurrentCID -match "^[a-zA-Z0-9]{32}$")) {
+            if (($CurrentCID) -and ($CurrentCID -match "^[a-fA-F0-9]{32}$")) {
                 $Param = @{
                     Uri = "$($SrcHostname)/oauth2/token"
                     Method = 'post'

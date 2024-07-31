@@ -163,9 +163,9 @@ process {
                                 "\CSAgent\Sim") -Name CU -ErrorAction SilentlyContinue).CU)).ToLower() -replace '-','')
                 }
             } catch {
-                Write-Output "Unable to obtain CID from registry. If Flight Control is enabled for your environment, please re-run script with an API key scoped from child CID.."
+                Write-Output "Unable to obtain CID from registry. If Flight Control is enabled for your environment, please re-run script with an API key scoped from child CID. If not, please disregard this message."
             }
-            if ($CurrentCID) {
+            if (($CurrentCID) -and ($CurrentCID -match "^[a-zA-Z0-9]{32}$")) {
                 $Param = @{
                     Uri = "$($SrcHostname)/oauth2/token"
                     Method = 'post'

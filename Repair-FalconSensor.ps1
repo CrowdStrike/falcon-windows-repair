@@ -3,7 +3,7 @@
         PS v3 or higher required
         TLS 1.2 required
     .NOTES
-        Version:   v1.1
+        Version:   v1.1.0
         Author:    CrowdStrike, Inc.
         Usage:     Use at your own risk. While all efforts have been made to ensure this script works as expected, you should test
                    in your own environment. 
@@ -29,10 +29,13 @@
 [CmdletBinding()]
 param( 
 
+    # Paste Client ID here
     [string]$SourceId = '',
      
+    # Paste Client Secret here
     [string]$SourceSecret = '',
 
+    # Put which cloud your environment is hosted on
     [ValidateSet('eu-1', 'us-1', 'us-2', 'us-gov-1')]
     [string]$Cloud = ''
 
@@ -72,6 +75,7 @@ begin {
 } 
 process {
     $repairHost = $false
+    $tempFolderCreated = $false
     $remediationEpoch = 1721370420
     $csFolderPath = "C:\Program Files\CrowdStrike"
     $csDriverFolderPath = "C:\Windows\System32\drivers\CrowdStrike"
@@ -81,35 +85,49 @@ process {
     try {
         if (-not (Test-Path $csFolderPath) -or -not (Test-Path $csDriverFolderPath)) {
             $repairHost = $true
+            Write-Output "'$csFolderPath' or '$csDriverFolderPath' could not be found, repairing sensor.."
         } else {
             $csFolderTime = Get-Item -Path $csFolderPath | Select-Object -ExpandProperty LastWriteTimeUtc;
             $csFolderTimeEpoch = [int][double]::Parse((New-TimeSpan -Start ([datetime]'1970-01-01 00:00:00') -End $csFolderTime).TotalSeconds)
-            $csDriverFolderPath = Get-Item -Path $csDriverFolderPath | Select-Object -ExpandProperty LastWriteTimeUtc;
-            $csDriverFolderPathEpoch = [int][double]::Parse((New-TimeSpan -Start ([datetime]'1970-01-01 00:00:00') -End $csDriverFolderPath).TotalSeconds)
-            if (($csFolderTimeEpoch -gt $remediationEpoch) -or ($csDriverFolderPathEpoch -gt $remediationEpoch)) {
-                $repairHost = $true
+            $csFolderCreationTime = (Get-Item $csFolderPath).CreationTime
+            $csFolderCreationEpoch = [int][double]::Parse((New-TimeSpan -Start ([datetime]'1970-01-01 00:00:00') -End $csFolderCreationTime).TotalSeconds)
+            $csDriverFolderTime = Get-Item -Path $csDriverFolderPath | Select-Object -ExpandProperty LastWriteTimeUtc;
+            $csDriverFolderTimeEpoch = [int][double]::Parse((New-TimeSpan -Start ([datetime]'1970-01-01 00:00:00') -End $csDriverFolderTime).TotalSeconds)
+            $csDriverFolderCreationTime = (Get-Item $csDriverFolderPath).CreationTime
+            $csDriverFolderCreationEpoch = [int][double]::Parse((New-TimeSpan -Start ([datetime]'1970-01-01 00:00:00') -End $csDriverFolderCreationTime).TotalSeconds)
+            if (($csFolderCreationEpoch -lt $remediationEpoch) -or ($csDriverFolderCreationEpoch -lt $remediationEpoch)) {
+                if (($csFolderTimeEpoch -gt $remediationEpoch) -or ($csDriverFolderTimeEpoch -gt $remediationEpoch)) {
+                    $repairHost = $true
+                    Write-Output "Potential issue found within '$csFolderPath' or '$csDriverFolderPath', repairing sensor.."
+                }
             }
         }
         if (((Get-Service -Name "CsFalconService").Status -ne "Running") -or ((Get-Service -Name "csagent").Status -ne "Running")) {
             $repairHost = $true
+            Write-Output "'csagent' or 'CsFalconService' found not running, repairing sensor.."
         }
         if (-not (Test-Path "C:\Windows\System32\drivers\CrowdStrike\csagent.sys") -or -not (Test-Path "C:\Program Files\CrowdStrike\CsFalconService.exe")) {
             $repairHost = $true
+            Write-Output "'csagent.sys' or 'CsFalconService.exe' could not be found, repairing sensor.."
         }   
     } catch {
         $repairHost = $true
+        Write-Output 'Sensor issue found, repairing sensor..'
     }    
     try {
-        $channelFiles = Get-ChildItem "C:\Windows\System32\drivers\CrowdStrike\C-00000291*.sys" -Filter $fileFilter
-        foreach ($cf in $channelFiles) {
-            # Get file creation time of channel file
-            $fileCreationTime = (Get-Item "$($cf.FullName)").CreationTime
-            $fileCreationEpoch = [int][double]::Parse((New-TimeSpan -Start ([datetime]'1970-01-01 00:00:00') -End $fileCreationTime).TotalSeconds)
-            if ($fileCreationEpoch -lt $remediationEpoch) {
-                # Remove the file if file creation epoch is less (earlier) than comparison epoch
-                Remove-Item -Path "$($cf.FullName)" -Force -ErrorAction Stop
+        if (Test-Path $csDriverFolderPath) {
+            $channelFiles = Get-ChildItem "C:\Windows\System32\drivers\CrowdStrike\C-00000291*.sys" -ErrorAction SilentlyContinue
+            foreach ($cf in $channelFiles) {
+                # Get file creation time of channel file
+                $fileCreationTime = (Get-Item "$($cf.FullName)").CreationTime
+                $fileCreationEpoch = [int][double]::Parse((New-TimeSpan -Start ([datetime]'1970-01-01 00:00:00') -End $fileCreationTime).TotalSeconds)
+                if ($fileCreationEpoch -lt $remediationEpoch) {
+                    # Remove the file if file creation epoch is less (earlier) than comparison epoch
+                    Remove-Item -Path "$($cf.FullName)" -Force -ErrorAction SilentlyContinue\
+                    Write-Output "Bad channel file $($cf.FullName) found. File has been removed."
+                }
             }
-        } 
+        }
     } catch {
             continue
     }     
@@ -134,29 +152,49 @@ process {
                 'us-gov-1' { $SrcHostname = 'https://api.laggar.gcw.crowdstrike.com' }
             }
             # Get CID value from registry
-            $CurrentCID = ''
-            if (Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}\Default") -Name CU -ErrorAction SilentlyContinue) {
-                $CurrentCID = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\" +
-                            "{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}" +
-                            "\Default") -Name CU -ErrorAction SilentlyContinue).CU)).ToLower() -replace '-','')
-            } elseif (Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services\CSAgent\Sim") -Name AG -ErrorAction SilentlyContinue) {
-                $CurrentCID = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services" +
-                            "\CSAgent\Sim") -Name CU -ErrorAction SilentlyContinue).CU)).ToLower() -replace '-','')
+            try {
+                $CurrentCID = ''
+                if (Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}\Default") -Name CU -ErrorAction SilentlyContinue) {
+                    $CurrentCID = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\" +
+                                "{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}" +
+                                "\Default") -Name CU -ErrorAction SilentlyContinue).CU)).ToLower() -replace '-','')
+                } elseif (Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services\CSAgent\Sim") -Name AG -ErrorAction SilentlyContinue) {
+                    $CurrentCID = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services" +
+                                "\CSAgent\Sim") -Name CU -ErrorAction SilentlyContinue).CU)).ToLower() -replace '-','')
+                }
+            } catch {
+                Write-Output "Unable to obtain CID from registry. If Flight Control is enabled for your environment, please re-run script with an API key scoped from child CID.."
             }
-            $Param = @{
-                Uri = "$($SrcHostname)/oauth2/token"
-                Method = 'post'
-                Headers = @{
-                    accept = 'application/json'
-                    'content-type' = 'application/x-www-form-urlencoded'
-                }
-                Body = @{
-                    'client_id' = $SourceId
-                    'client_secret' = $SourceSecret
-                    'member_cid' = $CurrentCID
-                }
-            }    
+            if ($CurrentCID) {
+                $Param = @{
+                    Uri = "$($SrcHostname)/oauth2/token"
+                    Method = 'post'
+                    Headers = @{
+                        accept = 'application/json'
+                        'content-type' = 'application/x-www-form-urlencoded'
+                    }
+                    Body = @{
+                        'client_id' = $SourceId
+                        'client_secret' = $SourceSecret
+                        'member_cid' = $CurrentCID
+                    }
+                } 
+            } else {
+                $Param = @{
+                    Uri = "$($SrcHostname)/oauth2/token"
+                    Method = 'post'
+                    Headers = @{
+                        accept = 'application/json'
+                        'content-type' = 'application/x-www-form-urlencoded'
+                    }
+                    Body = @{
+                        'client_id' = $SourceId
+                        'client_secret' = $SourceSecret
+                    }
+                } 
+            }
             # Get API Token
+            Write-Output "Generating Falcon Token.."
             $SrcToken = try {(Invoke-WebRequest @Param -UseBasicParsing -MaximumRedirection 0)
                         } catch {
                             if ($_.ErrorDetails -and $_.ErrorDetails.Length -gt 1) {
@@ -183,7 +221,7 @@ process {
         $SrcToken = ($SrcToken | ConvertFrom-Json)    
         if (-not $SrcToken.access_token) {
             throw "Unable to request token from source cloud $($Cloud) using client id $($SourceId). Return was: $($SrcToken)"
-        }              
+        }                     
         $Param = @{
             Uri = "$($SrcHostname)/policy/combined/sensor-update/v2?filter=platform_name%3A%20%27Windows%27%2Bname%3A%20%27platform_default%27"
             Method = 'get'
@@ -212,6 +250,7 @@ process {
                 authorization = "$($SrcToken.token_type) $($SrcToken.access_token)"
             }
         }
+        Write-Output "Obtaining sensor version from Falcon API.." 
         # Obtain sensor version of host
         $agentVersion = try {
             (((Invoke-WebRequest @Param -UseBasicParsing) | ConvertFrom-Json).resources.agent_version)
@@ -288,11 +327,10 @@ process {
                 }
                 OutFile = $InstallerPath
             }
+            Write-Output "Downloading installer to '$InstallerPath'.."
             $Request = try {
                 Invoke-WebRequest @Param -UseBasicParsing
-            }
-    
-            catch {
+            } catch {
                 if ($_.ErrorDetails -and $_.ErrorDetails.Length -gt 1) {
                     Write-Output $_.ErrorDetails.Length
                     $_.ErrorDetails | ConvertFrom-Json
@@ -304,7 +342,6 @@ process {
                     $_.Exception
                 }
             }
-    
             if ((Test-Path $InstallerPath) -eq $false) {
                 throw "Unable to locate $($InstallerPath)"
             }
@@ -325,6 +362,7 @@ process {
                 device_id = "MAINTENANCE"
             } | ConvertTo-Json
         }
+        Write-Output "Getting bulk sensor maintence token from Falcon API.."
         # Get sensor maintenance token
         $Request = try {Invoke-WebRequest @Param -UseBasicParsing | ConvertFrom-Json
         } catch {
@@ -339,9 +377,28 @@ process {
             throw "Unable to retrieve uninstall token from source cloud $($Cloud) using client id $($SourceId). Return was: $($Request)"
         }
         $InstallArgs += " MAINTENANCE_TOKEN=$($Request.resources.uninstall_token)"
-        Start-Process -FilePath $InstallerPath -ArgumentList $InstallArgs -PassThru | ForEach-Object {
+        Start-Process -FilePath $InstallerPath -ArgumentList $InstallArgs -PassThru -Wait | ForEach-Object {
             Write-Output "[$($_.Id)] '$($_.ProcessName)' beginning recover; sensor will become unresponsive..."
             Write-Output "[$($_.Id)] Beginning recover using the following arguments: '$($InstallArgs)' ..."
         }
+        try {
+            if ($tempFolderCreated) {
+                Remove-Item ($InstallerPath | Split-Path -Parent) -Force -Recurse -ErrorAction SilentlyContinue
+                Write-Output "'$($InstallerPath | Split-Path -Parent)' and '$InstallerPath' removed."
+            } else {
+                Remove-Item $InstallerPath -Force -Recurse -ErrorAction SilentlyContinue
+                Write-Output "'$InstallerPath' removed."
+            }
+        }
+        catch {
+            if ($tempFolderCreated) {
+                Write-Output "Error deleting '$($InstallerPath | Split-Path -Parent)' and '$InstallerPath'. Manual removal is required."
+            } else {
+                Write-Output "Error deleting $InstallerPath. Manual removal is required."
+            }
+        }
+        Write-Output "CrowdStrike Falcon Sensor successfully repaired. Please ensure sensor is checking into the Falcon console."
+    } else {
+        Write-Output "All checks passed, sensor does not appear to need repair."
     }
 }

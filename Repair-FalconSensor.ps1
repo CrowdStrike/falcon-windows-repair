@@ -3,7 +3,7 @@
         PS v3 or higher required
         TLS 1.2 required
     .NOTES
-        Version:   v1.1.0
+        Version:   v1.2.0
         Author:    CrowdStrike, Inc.
         Usage:     Use at your own risk. While all efforts have been made to ensure this script works as expected, you should test
                    in your own environment. 
@@ -120,19 +120,14 @@ process {
     try {
         if (Test-Path $csDriverFolderPath) {
             $channelFiles = Get-ChildItem "C:\Windows\System32\drivers\CrowdStrike\C-00000291*.sys" -ErrorAction SilentlyContinue
-            foreach ($cf in $channelFiles) {
-                # Get file creation time of channel file
-                $fileCreationTime = (Get-Item "$($cf.FullName)").CreationTime
-                $fileCreationEpoch = [int][double]::Parse((New-TimeSpan -Start ([datetime]'1970-01-01 00:00:00') -End $fileCreationTime).TotalSeconds)
-                if ($fileCreationEpoch -lt $remediationEpoch) {
-                    # Remove the file if file creation epoch is less (earlier) than comparison epoch
-                    Remove-Item -Path "$($cf.FullName)" -Force -ErrorAction SilentlyContinue\
-                    Write-Output "Bad channel file $($cf.FullName) found. File has been removed."
-                }
+            foreach ($cf in $channelFiles) {               
+                # Remove the file if file creation epoch is less (earlier) than comparison epoch
+                Remove-Item -Path $cf.FullName -Force -ErrorAction SilentlyContinue
+                Write-Output "Channel file $($cf.FullName) removed."
             }
         }
     } catch {
-            continue
+            Write-Output "No C-00000291*.sys channel files found."
     }     
     if ($repairHost) {
         # Validate if API credentials have been set.

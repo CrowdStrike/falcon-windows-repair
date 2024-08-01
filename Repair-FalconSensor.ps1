@@ -75,6 +75,10 @@ begin {
             throw "The term '$($cmd)' is not recognized as the name of a cmdlet."
         }
     }
+    $currentUser = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    if (-not ($currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
+        throw "This script requires administrative privileges."
+    } 
 } 
 process {
     $repairHost = $false
@@ -85,6 +89,19 @@ process {
     $InstallerPath = 'C:\temp\WindowsSensor.exe'
     $Hash = ''
     $InstallArgs = '/repair /quiet /norestart /forcedowngrade ProvNoWait=1'
+    try {
+        $driverFiles = Get-ChildItem $csDriverFolderPath -ErrorAction Stop
+        foreach ($file in $driverFiles) {
+            if ($file.FullName -like "*C-00000291*") {
+                # Remove 291 channel files, sensor restores file after reboot
+                Remove-Item -Path $file.FullName -Force -ErrorAction Stop  
+            }
+        }             
+    } catch [System.Management.Automation.ItemNotFoundException] {
+        $repairHost = $true
+    } catch {
+        throw "Error when attempting to delete 291 channel files: $_"
+    }    
     try {
         if (-not (Test-Path $csFolderPath) -or -not (Test-Path $csDriverFolderPath)) {
             $repairHost = $true
@@ -117,23 +134,6 @@ process {
         $repairHost = $true
         Write-Output 'Sensor issue found, repairing sensor..'
     }    
-    try {
-        if (Test-Path $csDriverFolderPath) {
-            while ($true) {
-                $channelFiles = Get-ChildItem "C:\Windows\System32\drivers\CrowdStrike\C-00000291*.sys" -ErrorAction SilentlyContinue
-                if ($channelFiles.length -ne 0) {
-                    foreach ($cf in $channelFiles) {               
-                        # Remove 291 channel files, sensor restores file after reboot
-                        Remove-Item -Path $cf.FullName -Force -ErrorAction Stop                
-                    }
-                } else {
-                    break
-                }
-            }
-        }
-    } catch {
-            throw "Error when deleting 291 channel file: $_"
-    }     
     if ($repairHost) {
         # Validate if API credentials have been set.
         if ((-not $SourceId) -or (-not $SourceSecret)) {

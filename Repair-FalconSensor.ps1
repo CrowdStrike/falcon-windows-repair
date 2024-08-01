@@ -119,15 +119,20 @@ process {
     }    
     try {
         if (Test-Path $csDriverFolderPath) {
-            $channelFiles = Get-ChildItem "C:\Windows\System32\drivers\CrowdStrike\C-00000291*.sys" -ErrorAction SilentlyContinue
-            foreach ($cf in $channelFiles) {               
-                # Remove the file if file creation epoch is less (earlier) than comparison epoch
-                Remove-Item -Path $cf.FullName -Force -ErrorAction SilentlyContinue
-                Write-Output "Channel file $($cf.FullName) removed."
+            while ($true) {
+                $channelFiles = Get-ChildItem "C:\Windows\System32\drivers\CrowdStrike\C-00000291*.sys" -ErrorAction SilentlyContinue
+                if ($channelFiles.length -ne 0) {
+                    foreach ($cf in $channelFiles) {               
+                        # Remove 291 channel files, sensor restores file after reboot
+                        Remove-Item -Path $cf.FullName -Force -ErrorAction Stop                
+                    }
+                } else {
+                    break
+                }
             }
         }
     } catch {
-            Write-Output "No C-00000291*.sys channel files found."
+            throw "Error when deleting 291 channel file: $_"
     }     
     if ($repairHost) {
         # Validate if API credentials have been set.

@@ -4,6 +4,10 @@ Scripts to help with the diagnosis and repair of unhealthy Windows Falcon sensor
 
 ### What's New
 
+#### Release 1.2.0
+
+- Overall improvement to script's checks and logic including formality checks for API ID/secret. Added toggle for Flight Controlled CID's.
+
 #### Release 1.1.0
 
 - New functionality added to enable the repair script to work with Falcon environments where parent-child relationships are used (Flight Control).

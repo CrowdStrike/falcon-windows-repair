@@ -2,7 +2,10 @@
 
 Scripts to help with the diagnosis and repair of unhealthy Windows Falcon sensor installations.
 
-### What's New
+### What's 
+
+#### Release 1.2.1
+- Added more compatibility checks to ensure script runs properly. Formatted outputted messages/errors. Fixed logic surrounding channel file deletion to avoid possible issues.
 
 #### Release 1.2.0
 

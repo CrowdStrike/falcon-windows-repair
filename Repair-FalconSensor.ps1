@@ -3,7 +3,7 @@
         PS v3 or higher required
         TLS 1.2 required
     .NOTES
-        Version:   v1.2.0
+        Version:   v1.2.1
         Author:    CrowdStrike, Inc.
         Usage:     Use at your own risk. While all efforts have been made to ensure this script works as expected, you should test
                    in your own environment. 

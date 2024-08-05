@@ -22,6 +22,8 @@
         OAuth2 API Client Secret from the source tenant.
     .PARAMETER Cloud
         Falcon Cloud to utilize. Available options: 'us-1', 'us-2', 'eu-1', 'us-gov-1'  
+    .PARAMETER FlightControl
+        Only set value to $true if your Falcon environment utilzes Flight Control for parent/child relationships
 #>
 
 
@@ -47,12 +49,12 @@ param(
 
 begin {
     if ($PSVersionTable.PSVersion -lt '3.0')
-       { throw "This script requires a miniumum PowerShell 3.0" }
+       { throw "[!] Error: This script requires a miniumum PowerShell 3.0" }
     if (!([Net.ServicePointManager]::SecurityProtocol -match 'Tls12')) {
         if (([enum]::GetNames([Net.SecurityProtocolType]) -contains [Net.SecurityProtocolType]::Tls12)) {
             [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         } else {
-            throw "Unable to use Tls12. Please review .NET and PowerShell requirenments."
+            throw "[!] Error: Unable to use Tls12. Please review .NET and PowerShell requirenments."
         }
     }
     # Check for necessary cmdlets
@@ -72,13 +74,16 @@ begin {
     )   
     foreach ($cmd in $cmds) {
         if (-not (Get-Command $cmd -errorAction SilentlyContinue)) {
-            throw "The term '$($cmd)' is not recognized as the name of a cmdlet."
+            throw "[!] Error: The term '$($cmd)' is not recognized as the name of a cmdlet."
         }
     }
     $currentUser = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     if (-not ($currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
-        throw "This script requires administrative privileges."
-    } 
+        throw "[!] Error: This script requires administrative privileges."
+    }
+    if ([Environment]::Is64BitProcess -ne [Environment]::Is64BitOperatingSystem) {
+        throw "[!] Error: 32-bit PowerShell process does not match the 64-bit Operating System"
+    }
 } 
 process {
     $repairHost = $false
@@ -100,12 +105,12 @@ process {
     } catch [System.Management.Automation.ItemNotFoundException] {
         $repairHost = $true
     } catch {
-        throw "Error when attempting to delete 291 channel files: $_"
+        throw "[!] Error: Attempting to delete 291 channel files: $_"
     }    
     try {
         if (-not (Test-Path $csFolderPath) -or -not (Test-Path $csDriverFolderPath)) {
             $repairHost = $true
-            Write-Output "'$csFolderPath' or '$csDriverFolderPath' could not be found, repairing sensor.."
+            Write-Output "[+] '$csFolderPath' or '$csDriverFolderPath' could not be found, repairing sensor.."
         } else {
             $csFolderTime = Get-Item -Path $csFolderPath | Select-Object -ExpandProperty LastWriteTimeUtc;
             $csFolderTimeEpoch = [int][double]::Parse((New-TimeSpan -Start ([datetime]'1970-01-01 00:00:00') -End $csFolderTime).TotalSeconds)
@@ -118,30 +123,30 @@ process {
             if (($csFolderCreationEpoch -lt $remediationEpoch) -or ($csDriverFolderCreationEpoch -lt $remediationEpoch)) {
                 if (($csFolderTimeEpoch -gt $remediationEpoch) -or ($csDriverFolderTimeEpoch -gt $remediationEpoch)) {
                     $repairHost = $true
-                    Write-Output "Potential issue found within '$csFolderPath' or '$csDriverFolderPath', repairing sensor.."
+                    Write-Output "[+] Potential issue found within '$csFolderPath' or '$csDriverFolderPath', repairing sensor.."
                 }
             }
         }
         if (((Get-Service -Name "CsFalconService").Status -ne "Running") -or ((Get-Service -Name "csagent").Status -ne "Running")) {
             $repairHost = $true
-            Write-Output "'csagent' or 'CsFalconService' found not running, repairing sensor.."
+            Write-Output "[+] 'csagent' or 'CsFalconService' found not running, repairing sensor.."
         }
         if (-not (Test-Path "C:\Windows\System32\drivers\CrowdStrike\csagent.sys") -or -not (Test-Path "C:\Program Files\CrowdStrike\CsFalconService.exe")) {
             $repairHost = $true
-            Write-Output "'csagent.sys' or 'CsFalconService.exe' could not be found, repairing sensor.."
+            Write-Output "[+] 'csagent.sys' or 'CsFalconService.exe' could not be found, repairing sensor.."
         }   
     } catch {
         $repairHost = $true
-        Write-Output 'Sensor issue found, repairing sensor..'
+        Write-Output '[+] Sensor issue found, repairing sensor..'
     }    
     if ($repairHost) {
         # Validate if API credentials have been set.
         if ((-not $SourceId) -or (-not $SourceSecret)) {
-            throw "API credentials missing."
+            throw "[!] Error: API credentials missing."
         } elseif ($SourceId -notmatch "^[a-fA-F0-9]{32}$") {
-            throw "SourceID '$SourceID' does not match proper formatting, please ensure SourceID is correct."
+            throw "[!] Error: SourceID '$SourceID' does not match proper formatting, please ensure SourceID is correct."
         } elseif ($SourceSecret -notmatch "^[a-zA-Z0-9]{40}$") {
-            throw "SourceSecret '$SourceSecret' does not match proper formatting, please ensure SourceSecret is correct."
+            throw "[!] Error: SourceSecret '$SourceSecret' does not match proper formatting, please ensure SourceSecret is correct."
         }
         if (-not (Test-Path -Path "C:\temp\")) {
             New-Item -Path "C:\" -Name "temp" -ItemType "directory"
@@ -150,7 +155,7 @@ process {
         $Retries=0
         do {
             if (-not $Cloud) {
-                throw "Cloud not specified, please specify -Cloud in arguments."
+                throw "[!] Error: Cloud not specified, please specify -Cloud in arguments."
             }
             switch ($Cloud) {
                 'eu-1' { $SrcHostname = 'https://api.eu-1.crowdstrike.com' }
@@ -186,7 +191,7 @@ process {
                             }
                         } 
                     } else {
-                        Write-Output "CID '$CurrentCID' does not match formatting criteria for CID. Continuing with script.."
+                        Write-Output "[+] CID '$CurrentCID' does not match formatting criteria for CID. Continuing with script.."
                         $Param = @{
                             Uri = "$($SrcHostname)/oauth2/token"
                             Method = 'post'
@@ -201,7 +206,7 @@ process {
                         } 
                     }
                 } catch {
-                    Write-Output "Unable to obtain CID from registry. Please re-run script with an API key scoped from child CID if error occurs."
+                    Write-Output "[+] Unable to obtain CID from registry. Please re-run script with an API key scoped from child CID if error occurs."
                 }                
             } else {
                 $Param = @{
@@ -218,7 +223,7 @@ process {
                 } 
             }
             # Get API Token
-            Write-Output "Generating Falcon Token.."
+            Write-Output "[+] Generating Falcon Token.."
             $SrcToken = try {(Invoke-WebRequest @Param -UseBasicParsing -MaximumRedirection 0)
                         } catch {
                             if ($_.ErrorDetails -and $_.ErrorDetails.Length -gt 1) {
@@ -226,7 +231,7 @@ process {
                                 $_.ErrorDetails | ConvertFrom-Json
                             } elseif ($_.Exception.Response) {
                                 if ($_.Exception.Response.StatusCode -eq 403) {
-                                    throw "Unable to request token from source cloud $($Cloud) using client id $($SourceId) due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review source API credentials."
+                                    throw "[!] Error: Unable to request token from source cloud $($Cloud) using client id $($SourceId) due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review source API credentials."
                                 }
                             } else {
                                 $_.Exception
@@ -234,7 +239,7 @@ process {
                         }    
             if ($SrcToken.StatusCode -ne 201) {
                 if (!$SrcToken.Headers) {
-                    Write-Host "Unable to request token. Please check API credentials or connectivity. Current response is: $($SrcToken)"
+                    Write-Host "[!] Error: Unable to request token. Please check API credentials or connectivity. Current response is: $($SrcToken)"
                     break
                 } else {
                     $Cloud=$SrcToken.Headers.'X-Cs-Region'
@@ -244,7 +249,7 @@ process {
         } while ($SrcToken.StatusCode -ne 201 -and $Retries -le 4)    
         $SrcToken = ($SrcToken | ConvertFrom-Json)    
         if (-not $SrcToken.access_token) {
-            throw "Unable to request token from source cloud $($Cloud) using client id $($SourceId). Return was: $($SrcToken)"
+            throw "[!] Error: Unable to request token from source cloud $($Cloud) using client id $($SourceId). Return was: $($SrcToken)"
         }                     
         $Param = @{
             Uri = "$($SrcHostname)/policy/combined/sensor-update/v2?filter=platform_name%3A%20%27Windows%27%2Bname%3A%20%27platform_default%27"
@@ -274,7 +279,7 @@ process {
                 authorization = "$($SrcToken.token_type) $($SrcToken.access_token)"
             }
         }
-        Write-Output "Obtaining sensor version from Falcon API.." 
+        Write-Output "[+] Obtaining sensor version from Falcon API.." 
         # Obtain sensor version of host
         $agentVersion = try {
             (((Invoke-WebRequest @Param -UseBasicParsing) | ConvertFrom-Json).resources.agent_version)
@@ -285,7 +290,7 @@ process {
                 $_.ErrorDetails | ConvertFrom-Json
             } elseif ($_.Exception.Response) {
                 if ($_.Exception.Response.StatusCode -eq 403) {
-                    throw "Unable to determine hash to be used due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review Sensor update policies scope for client id $($SourceId) with read permission or set sensor hash manually."
+                    throw "[!] Error: Unable to determine hash to be used due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review Sensor update policies scope for client id $($SourceId) with read permission or set sensor hash manually."
                 }
             } else {
                 $_.Exception
@@ -319,7 +324,7 @@ process {
                 $_.ErrorDetails | ConvertFrom-Json
             } elseif ($_.Exception.Response) {
                 if ($_.Exception.Response.StatusCode -eq 403) {
-                    throw "Unable to determine hash to be used due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review Sensor Download scope for client id $($SourceId) or set sensor hash manually."
+                    throw "[!] Error: Unable to determine hash to be used due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review Sensor Download scope for client id $($SourceId) or set sensor hash manually."
                 }
             } else {
                 $_.Exception
@@ -333,7 +338,7 @@ process {
             }
         }
         if (-not $Hash) {
-            throw "Unable to determine installation package hash to be used in this process."
+            throw "[!] Error: Unable to determine installation package hash to be used in this process."
         }        
         if (Test-Path $InstallerPath) {
             if ((Get-FileHash $InstallerPath).Hash.ToUpper() -ne $Hash.ToUpper()) {
@@ -351,7 +356,7 @@ process {
                 }
                 OutFile = $InstallerPath
             }
-            Write-Output "Downloading installer to '$InstallerPath'.."
+            Write-Output "[+] Downloading installer to '$InstallerPath'.."
             $Request = try {
                 Invoke-WebRequest @Param -UseBasicParsing
             } catch {
@@ -360,17 +365,17 @@ process {
                     $_.ErrorDetails | ConvertFrom-Json
                 } elseif ($_.Exception.Response) {
                     if ($_.Exception.Response.StatusCode -eq 403) {
-                        throw "Unable to download sensor file to be used due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review Sensor Download scope for client id $($SourceId) or upload sensor file manually at $($InstallerPath)."
+                        throw "[!] Error: Unable to download sensor file to be used due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review Sensor Download scope for client id $($SourceId) or upload sensor file manually at $($InstallerPath)."
                     }
                 } else {
                     $_.Exception
                 }
             }
             if ((Test-Path $InstallerPath) -eq $false) {
-                throw "Unable to locate $($InstallerPath)"
+                throw "[!] Error: Unable to locate $($InstallerPath)"
             }
             if ((Get-FileHash $InstallerPath).Hash.ToUpper() -ne $Hash.ToUpper()) {
-                throw "$($InstallerPath) hash differs. File looks like corrupted."
+                throw "[!] Error: $($InstallerPath) hash differs. File looks like corrupted."
             }
         }    
         $Param = @{
@@ -386,7 +391,7 @@ process {
                 device_id = "MAINTENANCE"
             } | ConvertTo-Json
         }
-        Write-Output "Getting bulk sensor maintence token from Falcon API.."
+        Write-Output "[+] Getting bulk sensor maintence token from Falcon API.."
         # Get sensor maintenance token
         $Request = try {Invoke-WebRequest @Param -UseBasicParsing | ConvertFrom-Json
         } catch {
@@ -398,7 +403,7 @@ process {
             }
         }
         if (-not $Request.resources) {
-            throw "Unable to retrieve uninstall token from source cloud $($Cloud) using client id $($SourceId). Return was: $($Request)"
+            throw "[!] Error: Unable to retrieve uninstall token from source cloud $($Cloud) using client id $($SourceId). Return was: $($Request)"
         }
         $InstallArgs += " MAINTENANCE_TOKEN=$($Request.resources.uninstall_token)"
         Start-Process -FilePath $InstallerPath -ArgumentList $InstallArgs -PassThru -Wait | ForEach-Object {
@@ -408,21 +413,21 @@ process {
         try {
             if ($tempFolderCreated) {
                 Remove-Item ($InstallerPath | Split-Path -Parent) -Force -Recurse -ErrorAction SilentlyContinue
-                Write-Output "'$($InstallerPath | Split-Path -Parent)' and '$InstallerPath' removed."
+                Write-Output "[+] '$($InstallerPath | Split-Path -Parent)' and '$InstallerPath' removed."
             } else {
                 Remove-Item $InstallerPath -Force -Recurse -ErrorAction SilentlyContinue
-                Write-Output "'$InstallerPath' removed."
+                Write-Output "[+] '$InstallerPath' removed."
             }
         }
         catch {
             if ($tempFolderCreated) {
-                Write-Output "Error deleting '$($InstallerPath | Split-Path -Parent)' and '$InstallerPath'. Manual removal is required."
+                Write-Output "[!] Error: Deleting '$($InstallerPath | Split-Path -Parent)' and '$InstallerPath'. Manual removal is required."
             } else {
-                Write-Output "Error deleting $InstallerPath. Manual removal is required."
+                Write-Output "[!] Error: Deleting $InstallerPath. Manual removal is required."
             }
         }
-        Write-Output "CrowdStrike Falcon Sensor successfully repaired. Please ensure sensor is checking into the Falcon console."
+        Write-Output "[+] CrowdStrike Falcon Sensor successfully repaired. Please ensure sensor is checking into the Falcon console."
     } else {
-        Write-Output "All checks passed, sensor does not appear to need repair."
+        Write-Output "[+] All checks passed, sensor does not appear to need repair."
     }
 }

@@ -4,6 +4,9 @@ Scripts to help with the diagnosis and repair of unhealthy Windows Falcon sensor
 
 ### What's New
 
+#### Release 1.2.1
+- Added more compatibility checks to ensure script runs properly. Formatted outputted messages/errors. Fixed logic surrounding channel file deletion to avoid possible issues.
+
 #### Release 1.2.0
 
 - Overall improvement to script's checks and logic including formality checks for API ID/secret. Added toggle for Flight Controlled CID's.

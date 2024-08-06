@@ -102,10 +102,13 @@ process {
                 if ($file.FullName -like "*C-00000291*") {
                     # Remove 291 channel files, sensor restores file after reboot
                     Remove-Item -Path $file.FullName -Force -ErrorAction Stop  
+                    Write-Output "[+] File '$($file.Fullname)' deleted"
                 }
             } 
         }                  
     } catch [System.Management.Automation.ItemNotFoundException] {
+        $repairHost = $true
+    } catch [System.Management.Automation.ErrorCategory.ObjectNotFound]{
         $repairHost = $true
     } catch {
         throw "[!] Error: Attempting to delete 291 channel files: $_"

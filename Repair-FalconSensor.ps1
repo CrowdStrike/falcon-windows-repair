@@ -94,7 +94,7 @@ process {
     $InstallerPath = 'C:\temp\WindowsSensor.exe'
     $Hash = ''
     $InstallArgs = '/repair /quiet /norestart /forcedowngrade ProvNoWait=1'
-
+    # Check if csagent is not running and delete 291 channel file
     try {
         if ((Get-Service -Name "csagent").Status -ne "Running") {
             $driverFiles = Get-ChildItem $csDriverFolderPath -ErrorAction Stop

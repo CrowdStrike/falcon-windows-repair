@@ -94,14 +94,17 @@ process {
     $InstallerPath = 'C:\temp\WindowsSensor.exe'
     $Hash = ''
     $InstallArgs = '/repair /quiet /norestart /forcedowngrade ProvNoWait=1'
+
     try {
-        $driverFiles = Get-ChildItem $csDriverFolderPath -ErrorAction Stop
-        foreach ($file in $driverFiles) {
-            if ($file.FullName -like "*C-00000291*") {
-                # Remove 291 channel files, sensor restores file after reboot
-                Remove-Item -Path $file.FullName -Force -ErrorAction Stop  
-            }
-        }             
+        if ((Get-Service -Name "csagent").Status -ne "Running") {
+            $driverFiles = Get-ChildItem $csDriverFolderPath -ErrorAction Stop
+            foreach ($file in $driverFiles) {
+                if ($file.FullName -like "*C-00000291*") {
+                    # Remove 291 channel files, sensor restores file after reboot
+                    Remove-Item -Path $file.FullName -Force -ErrorAction Stop  
+                }
+            } 
+        }                  
     } catch [System.Management.Automation.ItemNotFoundException] {
         $repairHost = $true
     } catch {

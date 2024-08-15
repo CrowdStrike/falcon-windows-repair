@@ -3,22 +3,22 @@
         PS v3 or higher required
         TLS 1.2 required
     .NOTES
-        Version:   v1.2.1
+        Version:   v1.3.0
         Author:    CrowdStrike, Inc.
         Usage:     Use at your own risk. While all efforts have been made to ensure this script works as expected, you should test
                    in your own environment. 
         Requirements:    
             Falcon Administrator role required for Created API access
-            API Key with following permissions: 'Hosts: Read', 'Sensor Download: Read', 'Sensor Update Policies: Read/Write'
+            API Key with following permissions: 'Sensor Download: Read'
             PowerShell v3 or higher
             TLS 1.2 minimum
             Sign the script, or execute with bypass        
     .DESCRIPTION
         Determines state of Falcon Sensor and repairs as necessary. Additional checks for bad channel file are performed, and file 
         is removed if deemed bad.
-    .PARAMETER SourceId
+    .PARAMETER ClientId
         OAuth2 API Client Id from the source tenant.  
-    .PARAMETER SourceSecret
+    .PARAMETER ClientSecret
         OAuth2 API Client Secret from the source tenant.
     .PARAMETER Cloud
         Falcon Cloud to utilize. Available options: 'us-1', 'us-2', 'eu-1', 'us-gov-1'  
@@ -32,10 +32,10 @@
 param( 
 
     # Paste Client ID here
-    [string]$SourceId = '',
+    [string]$ClientId = '',
      
     # Paste Client Secret here
-    [string]$SourceSecret = '',
+    [string]$ClientSecret = '',
 
     # Put which cloud your environment is hosted on
     [ValidateSet('eu-1', 'us-1', 'us-2', 'us-gov-1')]
@@ -48,6 +48,7 @@ param(
 <# ----------------      END Editable Region. ----------------- #>
 
 begin {
+    # Check for PowerShell 3.0 and Tls12
     if ($PSVersionTable.PSVersion -lt '3.0')
        { throw "[!] Error: This script requires a miniumum PowerShell 3.0" }
     if (!([Net.ServicePointManager]::SecurityProtocol -match 'Tls12')) {
@@ -77,10 +78,12 @@ begin {
             throw "[!] Error: The term '$($cmd)' is not recognized as the name of a cmdlet."
         }
     }
+    # Check current user has an administrator role
     $currentUser = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     if (-not ($currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
         throw "[!] Error: This script requires administrative privileges."
     }
+    # Check environment isn't 32-bit PowerShell
     if ([Environment]::Is64BitProcess -ne [Environment]::Is64BitOperatingSystem) {
         throw "[!] Error: 32-bit PowerShell process does not match the 64-bit Operating System"
     }
@@ -88,12 +91,12 @@ begin {
 process {
     $repairHost = $false
     $tempFolderCreated = $false
-    $remediationEpoch = 1721370420
+    $remediationEpoch = 1721370420  # Official CrowdStrike July 19th incident epoch +1hr
     $csFolderPath = "C:\Program Files\CrowdStrike"
     $csDriverFolderPath = "C:\Windows\System32\drivers\CrowdStrike"
     $InstallerPath = 'C:\temp\WindowsSensor.exe'
-    $Hash = ''
     $InstallArgs = '/repair /quiet /norestart /forcedowngrade ProvNoWait=1'
+
     # Check if csagent is not running and delete 291 channel file
     try {
         if ((Get-Service -Name "csagent").Status -ne "Running") {
@@ -102,22 +105,24 @@ process {
                 if ($file.FullName -like "*C-00000291*") {
                     # Remove 291 channel files, sensor restores file after reboot
                     Remove-Item -Path $file.FullName -Force -ErrorAction Stop  
-                    Write-Output "[+] File '$($file.Fullname)' deleted"
+                    Write-Output "[+] Channel File '$($file.Fullname)' deleted"
                 }
             } 
         }                  
     } catch [System.Management.Automation.ItemNotFoundException] {
         $repairHost = $true
-    } catch [System.Management.Automation.ErrorCategory.ObjectNotFound]{
+    } catch [Microsoft.Powershell.Commands.ServiceCommandException] {
         $repairHost = $true
     } catch {
         throw "[!] Error: Attempting to delete 291 channel files: $_"
     }    
     try {
+        # Check CrowdStrike folders haven't been renamed/deleted
         if (-not (Test-Path $csFolderPath) -or -not (Test-Path $csDriverFolderPath)) {
             $repairHost = $true
             Write-Output "[+] '$csFolderPath' or '$csDriverFolderPath' could not be found, repairing sensor.."
         } else {
+            # Check if folders could of been modified
             $csFolderTime = Get-Item -Path $csFolderPath | Select-Object -ExpandProperty LastWriteTimeUtc;
             $csFolderTimeEpoch = [int][double]::Parse((New-TimeSpan -Start ([datetime]'1970-01-01 00:00:00') -End $csFolderTime).TotalSeconds)
             $csFolderCreationTime = (Get-Item $csFolderPath).CreationTime
@@ -133,6 +138,7 @@ process {
                 }
             }
         }
+        # Check CsFalconService and csagent
         if (((Get-Service -Name "CsFalconService").Status -ne "Running") -or ((Get-Service -Name "csagent").Status -ne "Running")) {
             $repairHost = $true
             Write-Output "[+] 'csagent' or 'CsFalconService' found not running, repairing sensor.."
@@ -147,14 +153,15 @@ process {
     }    
     if ($repairHost) {
         # Validate if API credentials have been set.
-        if ((-not $SourceId) -or (-not $SourceSecret)) {
+        if ((-not $ClientId) -or (-not $ClientSecret)) {
             throw "[!] Error: API credentials missing."
-        } elseif ($SourceId -notmatch "^[a-fA-F0-9]{32}$") {
-            throw "[!] Error: SourceID '$SourceID' does not match proper formatting, please ensure SourceID is correct."
-        } elseif ($SourceSecret -notmatch "^[a-zA-Z0-9]{40}$") {
-            throw "[!] Error: SourceSecret '$SourceSecret' does not match proper formatting, please ensure SourceSecret is correct."
+        } elseif ($ClientId -notmatch "^[a-fA-F0-9]{32}$") {
+            throw "[!] Error: SourceID '$ClientId' does not match proper formatting, please ensure SourceID is correct."
+        } elseif ($ClientSecret -notmatch "^[a-zA-Z0-9]{40}$") {
+            throw "[!] Error: SourceSecret '$ClientSecret' does not match proper formatting, please ensure SourceSecret is correct."
         }
         if (-not (Test-Path -Path "C:\temp\")) {
+            # Create temp folder if it doesn't exist
             New-Item -Path "C:\" -Name "temp" -ItemType "directory"
             $tempFolderCreated = $true
         }
@@ -191,8 +198,8 @@ process {
                                 'content-type' = 'application/x-www-form-urlencoded'
                             }
                             Body = @{
-                                'client_id' = $SourceId
-                                'client_secret' = $SourceSecret
+                                'client_id' = $ClientId
+                                'client_secret' = $ClientSecret
                                 'member_cid' = $CurrentCID
                             }
                         } 
@@ -206,8 +213,8 @@ process {
                                 'content-type' = 'application/x-www-form-urlencoded'
                             }
                             Body = @{
-                                'client_id' = $SourceId
-                                'client_secret' = $SourceSecret
+                                'client_id' = $ClientId
+                                'client_secret' = $ClientSecret
                             }
                         } 
                     }
@@ -223,8 +230,8 @@ process {
                         'content-type' = 'application/x-www-form-urlencoded'
                     }
                     Body = @{
-                        'client_id' = $SourceId
-                        'client_secret' = $SourceSecret
+                        'client_id' = $ClientId
+                        'client_secret' = $ClientSecret
                     }
                 } 
             }
@@ -237,7 +244,7 @@ process {
                                 $_.ErrorDetails | ConvertFrom-Json
                             } elseif ($_.Exception.Response) {
                                 if ($_.Exception.Response.StatusCode -eq 403) {
-                                    throw "[!] Error: Unable to request token from source cloud $($Cloud) using client id $($SourceId) due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review source API credentials."
+                                    throw "[!] Error: Unable to request token from source cloud $($Cloud) using client id $($ClientId) due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review source API credentials."
                                 }
                             } else {
                                 $_.Exception
@@ -255,63 +262,8 @@ process {
         } while ($SrcToken.StatusCode -ne 201 -and $Retries -le 4)    
         $SrcToken = ($SrcToken | ConvertFrom-Json)    
         if (-not $SrcToken.access_token) {
-            throw "[!] Error: Unable to request token from source cloud $($Cloud) using client id $($SourceId). Return was: $($SrcToken)"
-        }                     
-        $Param = @{
-            Uri = "$($SrcHostname)/policy/combined/sensor-update/v2?filter=platform_name%3A%20%27Windows%27%2Bname%3A%20%27platform_default%27"
-            Method = 'get'
-            Header = @{
-                accept = 'application/json'
-                'content-type' = 'application/json'
-                authorization = "$($SrcToken.token_type) $($SrcToken.access_token)"
-            }
-        }
-        # Get Host Id from registry
-        $HostId = ''
-        if (Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}\Default") -Name AG -ErrorAction SilentlyContinue) {
-            $HostId = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CrowdStrike\" +
-                        "{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}" +
-                        "\Default") -Name AG -ErrorAction SilentlyContinue).AG)).ToLower() -replace '-','')
-        } elseif (Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services\CSAgent\Sim") -Name AG -ErrorAction SilentlyContinue) {
-            $HostId = ([System.BitConverter]::ToString(((Get-ItemProperty ("HKLM:\SYSTEM\CurrentControlSet\Services" +
-                        "\CSAgent\Sim") -Name AG -ErrorAction SilentlyContinue).AG)).ToLower() -replace '-','')
-        }
-        $Param = @{
-            Uri = "$($SrcHostname)/devices/entities/devices/v2?ids=$($HostId)"
-            Method = 'get'
-            Header = @{
-                accept = 'application/json'
-                'content-type' = 'application/json'
-                authorization = "$($SrcToken.token_type) $($SrcToken.access_token)"
-            }
-        }
-        Write-Output "[+] Obtaining sensor version from Falcon API.." 
-        # Obtain sensor version of host
-        $agentVersion = try {
-            (((Invoke-WebRequest @Param -UseBasicParsing) | ConvertFrom-Json).resources.agent_version)
-        }
-        catch {
-            if ($_.ErrorDetails -and $_.ErrorDetails.Length -gt 1) {
-                Write-Output $_.ErrorDetails.Length
-                $_.ErrorDetails | ConvertFrom-Json
-            } elseif ($_.Exception.Response) {
-                if ($_.Exception.Response.StatusCode -eq 403) {
-                    throw "[!] Error: Unable to determine hash to be used due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review Sensor update policies scope for client id $($SourceId) with read permission or set sensor hash manually."
-                }
-            } else {
-                $_.Exception
-            }
-        }
-        $agentVersion = ($agentVersion.Split(".")[0..2]) -join '.'
-        $Param = @{
-            Uri = "$($SrcHostname)/policy/combined/sensor-update/v2?filter=platform_name%3A%20%27Windows%27%2Bname%3A%20%27platform_default%27"
-            Method = 'get'
-            Header = @{
-                accept = 'application/json'
-                'content-type' = 'application/json'
-                authorization = "$($SrcToken.token_type) $($SrcToken.access_token)"
-            }
-        }
+            throw "[!] Error: Unable to request token from source cloud $($Cloud) using client id $($ClientId). Return was: $($SrcToken)"
+        }                        
         # Get all Windows sensor builds
         $Param = @{
             Uri = "$($SrcHostname)/sensors/combined/installers/v1?filter=platform%3A%27windows%27"
@@ -330,28 +282,21 @@ process {
                 $_.ErrorDetails | ConvertFrom-Json
             } elseif ($_.Exception.Response) {
                 if ($_.Exception.Response.StatusCode -eq 403) {
-                    throw "[!] Error: Unable to determine hash to be used due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review Sensor Download scope for client id $($SourceId) or set sensor hash manually."
+                    throw "[!] Error: Unable to determine hash to be used due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review Sensor Download scope for client id $($ClientId) or set sensor hash manually."
                 }
             } else {
                 $_.Exception
             }
-        }
-        # Compare hash from build versions found, and agent version on host
-        foreach ($findBuild in $Installers.resources) {
-            if ($findBuild.version -eq $agentVersion) {
-                $Hash = $findBuild.sha256
-                break
-            }
-        }
-        if (-not $Hash) {
-            throw "[!] Error: Unable to determine installation package hash to be used in this process."
-        }        
+        } 
+        # Check that there isn't already a bad installer
+        $Hash = $Installers.resources[0].sha256                
         if (Test-Path $InstallerPath) {
             if ((Get-FileHash $InstallerPath).Hash.ToUpper() -ne $Hash.ToUpper()) {
                 Remove-Item $InstallerPath
             }
         }    
         if ((Test-Path $InstallerPath) -eq $false) {
+            # Download newest sensor
             $Param = @{
                 Uri = "$($SrcHostname)/sensors/entities/download-installer/v1?id=" + $Hash
                 Method = 'get'
@@ -371,7 +316,7 @@ process {
                     $_.ErrorDetails | ConvertFrom-Json
                 } elseif ($_.Exception.Response) {
                     if ($_.Exception.Response.StatusCode -eq 403) {
-                        throw "[!] Error: Unable to download sensor file to be used due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review Sensor Download scope for client id $($SourceId) or upload sensor file manually at $($InstallerPath)."
+                        throw "[!] Error: Unable to download sensor file to be used due to error $([int] $_.Exception.Response.StatusCode): $($_.Exception.Response.StatusDescription). Please review Sensor Download scope for client id $($ClientId) or upload sensor file manually at $($InstallerPath)."
                     }
                 } else {
                     $_.Exception
@@ -384,38 +329,12 @@ process {
                 throw "[!] Error: $($InstallerPath) hash differs. File looks like corrupted."
             }
         }    
-        $Param = @{
-            Uri = "$($SrcHostname)/policy/combined/reveal-uninstall-token/v1"
-            Method = 'post'
-            Headers = @{
-                accept = 'application/json'
-                'content-type' = 'application/json'
-                authorization = "$($SrcToken.token_type) $($SrcToken.access_token)"
-            }
-            Body = @{
-                audit_message = "Repair-FalconSensor"
-                device_id = "MAINTENANCE"
-            } | ConvertTo-Json
-        }
-        Write-Output "[+] Getting bulk sensor maintence token from Falcon API.."
-        # Get sensor maintenance token
-        $Request = try {Invoke-WebRequest @Param -UseBasicParsing | ConvertFrom-Json
-        } catch {
-            if ($_.ErrorDetails) {
-                $_.ErrorDetails | ConvertFrom-Json
-            }
-            else {
-                $_.Exception
-            }
-        }
-        if (-not $Request.resources) {
-            throw "[!] Error: Unable to retrieve uninstall token from source cloud $($Cloud) using client id $($SourceId). Return was: $($Request)"
-        }
-        $InstallArgs += " MAINTENANCE_TOKEN=$($Request.resources.uninstall_token)"
+        # Start the sensor installer to begin repair process        
         Start-Process -FilePath $InstallerPath -ArgumentList $InstallArgs -PassThru -Wait | ForEach-Object {
             Write-Output "[$($_.Id)] '$($_.ProcessName)' beginning recover; sensor will become unresponsive..."
             Write-Output "[$($_.Id)] Beginning recover using the following arguments: '$($InstallArgs)' ..."
         }
+        # Clean up
         try {
             if ($tempFolderCreated) {
                 Remove-Item ($InstallerPath | Split-Path -Parent) -Force -Recurse -ErrorAction SilentlyContinue

@@ -96,6 +96,7 @@ process {
     $csDriverFolderPath = "C:\Windows\System32\drivers\CrowdStrike"
     $InstallerPath = 'C:\temp\WindowsSensor.exe'
     $InstallArgs = '/repair /quiet /norestart /forcedowngrade ProvNoWait=1'
+    $maintenceTokenReq = $false
 
     # Check if csagent is not running and delete 291 channel file
     try {
@@ -121,6 +122,9 @@ process {
         if (-not (Test-Path $csFolderPath) -or -not (Test-Path $csDriverFolderPath)) {
             $repairHost = $true
             Write-Output "[+] '$csFolderPath' or '$csDriverFolderPath' could not be found, repairing sensor.."
+            if (-not (Test-Path $csDriverFolderPath)) {
+                $maintenceTokenReq = $true
+            }
         } else {
             # Check if folders could of been modified
             $csFolderTime = Get-Item -Path $csFolderPath | Select-Object -ExpandProperty LastWriteTimeUtc;
@@ -135,6 +139,9 @@ process {
                 if (($csFolderTimeEpoch -gt $remediationEpoch) -or ($csDriverFolderTimeEpoch -gt $remediationEpoch)) {
                     $repairHost = $true
                     Write-Output "[+] Potential issue found within '$csFolderPath' or '$csDriverFolderPath', repairing sensor.."
+                    if ($csDriverFolderTimeEpoch -gt $remediationEpoch) {
+                        $maintenceTokenReq = $true
+                    }
                 }
             }
         }
@@ -142,10 +149,16 @@ process {
         if (((Get-Service -Name "CsFalconService").Status -ne "Running") -or ((Get-Service -Name "csagent").Status -ne "Running")) {
             $repairHost = $true
             Write-Output "[+] 'csagent' or 'CsFalconService' found not running, repairing sensor.."
+            if ((Get-Service -Name "CsFalconService").Status -ne "Running") {
+                $maintenceTokenReq = $true
+            }
         }
         if (-not (Test-Path "C:\Windows\System32\drivers\CrowdStrike\csagent.sys") -or -not (Test-Path "C:\Program Files\CrowdStrike\CsFalconService.exe")) {
             $repairHost = $true
             Write-Output "[+] 'csagent.sys' or 'CsFalconService.exe' could not be found, repairing sensor.."
+            if (-not (Test-Path "C:\Program Files\CrowdStrike\CsFalconService.exe")) {
+                $maintenceTokenReq = $true
+            }
         }   
     } catch {
         $repairHost = $true
@@ -328,7 +341,38 @@ process {
             if ((Get-FileHash $InstallerPath).Hash.ToUpper() -ne $Hash.ToUpper()) {
                 throw "[!] Error: $($InstallerPath) hash differs. File looks like corrupted."
             }
-        }    
+        }     
+        if ($maintenceTokenReq) {
+            # Get sensor maintenance token    
+            $Param = @{
+                Uri = "$($SrcHostname)/policy/combined/reveal-uninstall-token/v1"
+                Method = 'post'
+                Headers = @{
+                    accept = 'application/json'
+                    'content-type' = 'application/json'
+                    authorization = "$($SrcToken.token_type) $($SrcToken.access_token)"
+                }
+                Body = @{
+                    audit_message = "Repair-FalconSensor"
+                    device_id = "MAINTENANCE"
+                } | ConvertTo-Json
+            }
+            Write-Output "[+] Getting bulk sensor maintence token from Falcon API.."
+            $Request = try {Invoke-WebRequest @Param -UseBasicParsing | ConvertFrom-Json
+            } catch {
+                if ($_.ErrorDetails) {
+                    $_.ErrorDetails | ConvertFrom-Json
+                }
+                else {
+                    $_.Exception
+                }
+            }
+            if (-not $Request.resources) {
+                throw "[!] Error: Unable to retrieve maintenance token from source cloud '$($Cloud)' using client id $($ClientId). Return was: $($Request.errors.message)."
+            } else {
+                $InstallArgs += " MAINTENANCE_TOKEN=$($Request.resources.uninstall_token)"
+            }
+        }        
         # Start the sensor installer to begin repair process        
         Start-Process -FilePath $InstallerPath -ArgumentList $InstallArgs -PassThru -Wait | ForEach-Object {
             Write-Output "[$($_.Id)] '$($_.ProcessName)' beginning recover; sensor will become unresponsive..."

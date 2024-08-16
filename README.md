@@ -58,6 +58,7 @@ For machines still stuck within unusable states, please continue to follow instr
 * Falcon Administrator role required to Create API Keys  
   * API Key with following permission:
     * 'Sensor Download: Read'
+    * 'Sensor Update Policies: Read + Write'
 * 64-bit PowerShell 3.0 or higher  
 * TLS 1.2 minimum  
 * PowerShell Administrator level execution
@@ -84,6 +85,7 @@ For machines still stuck within unusable states, please continue to follow instr
 1. Generate API Token: [https://falcon.crowdstrike.com/api-clients-and-keys/](https://falcon.crowdstrike.com/api-clients-and-keys/)  
 2. Click on `Create API client`, and grant the following permission:
    1. Sensor Download: Read
+   2. Sensor Update Policies: Read + Write
 3. Copy down the `Client ID` and `Client Secret` from the pop-up.
 4. Open `Repair-FalconSensor.ps1` in a text editor
 5. Scroll to the “Editable Region” of the script and enter the API `Client ID`, `Client Secret`, your Falcon Cloud, and set Flight Control to `$true` if using this in a Flight Controlled CID.

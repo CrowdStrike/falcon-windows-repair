@@ -4,6 +4,9 @@ Scripts to help with the diagnosis and repair of unhealthy Windows Falcon sensor
 
 ### What's New
 
+#### Release 1.3.1
+- Added checks for when a maintenance token would be required.
+
 #### Release 1.3.0
 - Removed unnecessary logic when repairing the sensor, reducing API permissions required to run repair script. Added additional commenting to code. 
 

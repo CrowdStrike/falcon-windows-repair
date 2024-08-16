@@ -122,7 +122,7 @@ process {
         if (-not (Test-Path $csFolderPath) -or -not (Test-Path $csDriverFolderPath)) {
             $repairHost = $true
             Write-Output "[+] '$csFolderPath' or '$csDriverFolderPath' could not be found, repairing sensor.."
-            if (-not (Test-Path $csDriverFolderPath)) {
+            if (-not (Test-Path $csFolderPath)) {
                 $maintenceTokenReq = $true
             }
         } else {
@@ -139,7 +139,7 @@ process {
                 if (($csFolderTimeEpoch -gt $remediationEpoch) -or ($csDriverFolderTimeEpoch -gt $remediationEpoch)) {
                     $repairHost = $true
                     Write-Output "[+] Potential issue found within '$csFolderPath' or '$csDriverFolderPath', repairing sensor.."
-                    if ($csDriverFolderTimeEpoch -gt $remediationEpoch) {
+                    if ($csFolderTimeEpoch -gt $remediationEpoch) {
                         $maintenceTokenReq = $true
                     }
                 }
